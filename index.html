@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#181818">
+<title>Your X Wrapped</title>
+<meta name="description" content="Fly through your year on X, neuron to neuron.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*
+  X Wrapped. One visual language from the Paper hero: #181818 ground, flat neurons with a dark rim
+  and a soft highlight, purple / blue / pink, squircle chips and buttons, Inter at -0.04em.
+  One screen, one idea. Text sits straight on the background (no cards). One primary button per view.
+  Committed dark look, so colours are explicit.
+*/
+:root{
+  --bg:#181818;
+  --ink:#FFFFFF;
+  --muted:#C0C0C0;
+  --faint:#8A8A8A;
+  --line:#343434;
+  --purple:#805CF9; --purple-d:#553CAA; --purple-l:#B6AFF6;
+  --blue:#40BCFD;   --blue-d:#2878A3;   --blue-l:#99D8FF;
+  --pink:#DF8DDC;   --pink-d:#AD6BAB;   --pink-l:#F7CEF4;
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;
+  --pad-l:max(24px,env(safe-area-inset-left,0px));
+  --pad-r:max(24px,env(safe-area-inset-right,0px));
+  --pad-b:max(24px,env(safe-area-inset-bottom,0px));
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--font);
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+body{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+canvas#scene{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+/* ---------- buttons (squircle, from Paper) ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:12px 22px;
+  font-size:19px;font-weight:500;letter-spacing:-0.02em;border-radius:16px;
+  transition:transform .12s ease,filter .12s ease,background-color .2s ease}
+@supports (corner-shape: squircle){ .btn,.tag,.chip{border-radius:999px;corner-shape:squircle} }
+.btn:active{transform:scale(.97);filter:brightness(.9)}
+.btn.primary{background:var(--purple);color:#fff;border-top:1.5px solid var(--purple-l);outline:1.5px solid var(--purple-d)}
+.btn.primary:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.btn.secondary{background:#232323;border:1.5px solid #3A3A3A;color:var(--ink)}
+.btn.secondary:hover{background:#2C2C2C}
+.btn.icon{width:52px;padding:0}
+.btn[aria-busy="true"]{pointer-events:none}
+.spinner{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- landing ---------- */
+#landing{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;
+  padding:0 var(--pad-r) 0 max(var(--pad-l),6vw);pointer-events:none;transition:opacity .45s ease}
+#landing > *{pointer-events:auto}
+#landing h1{margin:0;font-size:clamp(52px,7vw,96px);font-weight:600;letter-spacing:-0.04em;line-height:1.1}
+#landing .sub{margin:12px 0 32px;font-size:clamp(18px,1.7vw,24px);color:var(--muted);letter-spacing:-0.02em;line-height:1.5;max-width:30ch}
+#landing .fine{margin:16px 0 0;font-size:14px;color:var(--faint)}
+#landing.gone{opacity:0;pointer-events:none}
+#landing.gone > *{pointer-events:none}
+
+/* landing chips, pinned to neurons in the scene */
+#chips{position:fixed;inset:0;pointer-events:none;transition:opacity .35s ease}
+#chips.gone{opacity:0}
+.chip{position:absolute;left:0;top:0;padding:12px 18px 13px;border-radius:20px;white-space:nowrap;will-change:transform}
+.chip b{display:block;font-size:28px;font-weight:600;letter-spacing:-0.04em;line-height:1.15}
+.chip span{display:block;font-size:15px;font-weight:500;letter-spacing:-0.02em;line-height:1.3}
+
+/* colour roles: fill, top highlight, rim, and text that keeps 4.5:1 on that fill */
+.c-purple{background:var(--purple);border-top:1.5px solid var(--purple-l);outline:1.5px solid var(--purple-d);color:#fff}
+.c-blue{background:var(--blue);border-top:1.5px solid var(--blue-l);outline:1.5px solid var(--blue-d);color:#06283D}
+.c-pink{background:var(--pink);border-top:1.5px solid var(--pink-l);outline:1.5px solid var(--pink-d);color:#37102F}
+
+/* ---------- journey ---------- */
+#journey{position:fixed;inset:0;opacity:0;pointer-events:none;transition:opacity .4s ease}
+#journey.on{opacity:1;pointer-events:auto}
+.topbar{position:absolute;top:max(18px,env(safe-area-inset-top,0px));left:var(--pad-l);right:var(--pad-r);
+  display:flex;align-items:center;gap:16px}
+.close{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;background:rgba(24,24,24,.72);flex:none}
+.close:hover{background:#2C2C2C}
+.progress{flex:1;display:flex;gap:6px;max-width:420px;margin-left:auto}
+.progress i{flex:1;height:4px;border-radius:2px;background:#333;transition:background-color .3s ease}
+.progress i.done{background:#fff}
+
+.panel{position:absolute;left:max(var(--pad-l),6vw);top:50%;transform:translateY(-50%);width:min(560px,46vw)}
+.slide > *{opacity:0;transform:translateY(12px);transition:opacity .45s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
+.slide.in > *{opacity:1;transform:none}
+.slide.in > :nth-child(2){transition-delay:.06s}
+.slide.in > :nth-child(3){transition-delay:.12s}
+.slide.in > :nth-child(4){transition-delay:.18s}
+.tag{display:inline-block;padding:6px 12px 7px;border-radius:12px;font-size:15px;font-weight:600;letter-spacing:-0.01em}
+.big{margin:20px 0 8px;font-size:clamp(64px,9vw,128px);font-weight:600;letter-spacing:-0.045em;line-height:1;font-variant-numeric:tabular-nums}
+.big.quote{font-size:clamp(34px,4.2vw,56px);letter-spacing:-0.035em;line-height:1.12}
+.line{margin:0;font-size:clamp(19px,1.7vw,24px);color:var(--muted);letter-spacing:-0.02em;line-height:1.45;max-width:26ch}
+.line strong{color:#fff;font-weight:500}
+
+.nav{display:flex;gap:12px;margin-top:40px}
+.nav .grow{min-width:150px}
+.hint{position:absolute;bottom:var(--pad-b);left:0;right:0;text-align:center;font-size:13px;color:var(--faint);pointer-events:none}
+
+#scrim{position:fixed;inset:0;pointer-events:none;opacity:1;transition:opacity .4s ease;
+  background:linear-gradient(to right,rgba(24,24,24,.9) 0%,rgba(24,24,24,.6) 32%,rgba(24,24,24,0) 55%)}
+#scrim.on{opacity:1}
+#fade{position:fixed;inset:0;background:var(--bg);opacity:0;pointer-events:none;transition:opacity .28s ease}
+#fade.on{opacity:1}
+#toast{position:fixed;left:50%;top:max(80px,env(safe-area-inset-top,0px));transform:translate(-50%,-8px);padding:10px 16px;
+  border-radius:12px;background:#262626;border:1px solid var(--line);font-size:15px;opacity:0;transition:.25s ease;pointer-events:none}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- narrow screens: neuron up top, words at the bottom ---------- */
+@media (max-width:760px), (max-aspect-ratio:4/5){
+  #landing{justify-content:flex-end;padding:0 var(--pad-r) calc(var(--pad-b) + 8px) var(--pad-l);
+    background:linear-gradient(to top,var(--bg) 42%,rgba(24,24,24,0) 70%)}
+  #landing .sub{margin-bottom:24px}
+  #landing .btn{width:100%}
+  .chip.c-blue{display:none}
+  .chip b{font-size:22px} .chip span{font-size:13px} .chip{padding:9px 14px 10px}
+  .panel{left:var(--pad-l);right:var(--pad-r);width:auto;top:auto;bottom:var(--pad-b);transform:none;
+  }
+  #scrim{background:linear-gradient(to top,var(--bg) 0%,var(--bg) 30%,rgba(24,24,24,0) 58%)}
+  .big{margin:16px 0 6px}
+  .nav{margin-top:28px}
+  .nav .grow{flex:1}
+  .hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .slide > *{transform:none!important;transition:opacity .2s ease!important}
+  .btn{transition:none}
+}
+
+#wash{position:fixed;inset:0;pointer-events:none;opacity:0}
+.nav{transition:opacity .35s ease}
+.nav.wait{opacity:0;pointer-events:none}
+#fxToggle .off{display:none}
+#fxToggle.muted .on{display:none}
+#fxToggle.muted .off{display:block}
+#fxToggle.muted{color:var(--faint)}
+</style>
+
+</head>
+<body>
+<canvas id="scene" aria-hidden="true"></canvas>
+<div id="wash" aria-hidden="true"></div>
+<div id="scrim"></div>
+
+<section id="landing" aria-labelledby="h">
+  <h1 id="h">Your X Wrapped</h1>
+  <p class="sub">Connect your X account to relive your year, one memory at a time.</p>
+  <div><button class="btn primary" id="connect">Connect Account</button></div>
+  <p class="fine">Demo with sample data. Nothing is posted for you.</p>
+</section>
+
+<div id="chips" aria-hidden="true">
+  <div class="chip c-purple" data-n="0"><b>5,318</b><span>posts and replies</span></div>
+  <div class="chip c-blue" data-n="1" data-side="left"><b>10pm</b><span>your busiest hour</span></div>
+  <div class="chip c-pink" data-n="2"><b>47 days</b><span>in a row</span></div>
+</div>
+
+<section id="journey" aria-label="Your year">
+  <div class="topbar">
+    <button class="close" id="close" aria-label="Close wrapped">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+    </button>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+    <button class="close" id="fxToggle" aria-pressed="true" aria-label="Sound and haptics">
+      <svg class="on" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8H3z" fill="currentColor"/><path d="M13 7.2a4 4 0 010 5.6M15.3 5a7 7 0 010 10"/></svg>
+      <svg class="off" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8H3z" fill="currentColor"/><path d="M13.5 8l4 4M17.5 8l-4 4"/></svg>
+    </button>
+  </div>
+  <div class="panel">
+    <div class="slide" id="slide" aria-live="polite"></div>
+    <div class="nav" id="nav"></div>
+  </div>
+  <p class="hint">Use the arrow keys, or tap anywhere to keep going</p>
+</section>
+
+<div id="fade"></div>
+<div id="toast" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script>
+/* ==========================================================================
+   HANDOFF NOTES
+   - The whole ride is ONE smooth spline that passes through every neuron's
+     centre: landing -> N0 -> N1 ... -> N5. You stop inside each soma.
+   - Position along the ride is "d" (world units of arc length). A hop just
+     animates d from one centre to the next with a cruise speed profile
+     (soft push-off, steady glide, soft landing). No teleports anywhere.
+   - The camera never blends look-at points. It turns toward a point a few
+     units ahead on the path, with damping and a turn-rate cap.
+   - Membrane crossing is masked by #wash, a flat colour overlay whose opacity
+     comes straight from the camera's distance to the membrane (no timers).
+   - Transparent things fade by view depth in their shader and have a fixed
+     renderOrder, so nothing pops or flickers when the camera is close.
+   - window.__wrapped.sim(...) runs the motion at a fixed 60fps without
+     rendering and returns speed / turn-rate stats (used for testing).
+   ========================================================================== */
+
+/* ---------- DATA (sample year) ---------- */
+const SLIDES = [
+  { c:'purple', tag:'Posts',        big:'5,318', count:5318, line:'posts and replies this year. About <strong>14 a day</strong>.' },
+  { c:'blue',   tag:'Busiest hour', big:'10pm',  line:'is when you show up the most. Night owl confirmed.' },
+  { c:'pink',   tag:'Streak',       big:'47 days', line:'in a row without missing a day.' },
+  { c:'purple', tag:'Top post',     quote:'shipped it at 2am. no tests. no regrets.', line:'<strong>12.4k likes</strong>. Your most loved post of the year.' },
+  { c:'blue',   tag:'Your person',  big:'84', count:84, line:'replies to <strong>@julespark</strong>. You two never stopped talking.' },
+  { c:'pink',   tag:'Your year',    quote:'The Midnight Shipper', line:'Late nights, real launches, zero chill.', end:true },
+];
+const SHARE_TEXT = 'My X Wrapped: The Midnight Shipper. 5,318 posts, busiest at 10pm, a 47 day streak.';
+
+/* ---------- LOOK ---------- */
+const COL = {
+  bg:0x181818,
+  purple:{ c:0x805CF9, d:0x553CAA, l:0xB6AFF6 },
+  blue:  { c:0x40BCFD, d:0x2878A3, l:0x99D8FF },
+  pink:  { c:0xDF8DDC, d:0xAD6BAB, l:0xF7CEF4 },
+};
+const CFG = {
+  fov:50, fovNarrow:72,
+  cruise:16,                 // average speed, units per second
+  hopMin:2.7, hopMax:3.8,    // seconds per hop
+  accel:.24, decel:.36,      // share of the hop spent speeding up / slowing down
+  revealAt:.78,              // when the next memory starts to appear (share of hop)
+  lift:.9,                   // camera rides this far above the synapse
+  lookAhead:8,               // units ahead on the path the camera turns toward
+  turnRate:3.6, maxTurnDeg:85,
+  skipRate:2.6,              // Next during a ride speeds it up this much (never teleports)
+  fogNear:50, fogFar:260,
+  bgNeurons:90, corridor:7,
+};
+// neurons are laid out by walking an S-curve: each hop turns ~50 degrees, so the ride flows
+const NEURONS = (()=>{
+  const cols=['purple','blue','pink','purple','blue','pink'], radii=[3.6,3.2,3.4,3.6,3.2,3.4];
+  const yaw=[0,50,-55,45,-50,50], pitch=[0,10,-14,8,-10,12], step=[0,40,42,38,44,40];
+  let p=[0,0,0], h=0, v=-.05; const out=[];
+  for(let i=0;i<6;i++){
+    h+=yaw[i]*Math.PI/180; v+=pitch[i]*Math.PI/180;
+    const d=[Math.sin(h)*Math.cos(v),Math.sin(v),-Math.cos(h)*Math.cos(v)];
+    p=[p[0]+d[0]*step[i],p[1]+d[1]*step[i],p[2]+d[2]*step[i]];
+    out.push({p:p.slice(),r:radii[i],c:cols[i]});
+  }
+  return out;
+})();
+const LANDING = { pos:[34,12,46], target:[6,0,-34] };
+
+/* ---------- helpers ---------- */
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s);
+const V = (x,y,z) => new THREE.Vector3(x,y,z);
+const UP = V(0,1,0);
+const clamp = (x,a,b) => Math.min(b,Math.max(a,x));
+const smooth = (a,b,x) => { const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
+const rand = (a,b) => a+Math.random()*(b-a);
+const state = { mode:'landing', slide:-1, travel:null };
+
+/* cruise profile: soft push-off, steady glide, soft landing (peak speed ~1.4x average) */
+const PROFILE = (()=>{
+  const N=800, P=new Float32Array(N+1); let acc=0;
+  const vel=p => p<CFG.accel ? Math.sin(p/CFG.accel*Math.PI/2)**2
+              : p>1-CFG.decel ? Math.sin((1-p)/CFG.decel*Math.PI/2)**2 : 1;
+  for(let k=1;k<=N;k++){ acc+=vel((k-.5)/N); P[k]=acc; }
+  for(let k=0;k<=N;k++) P[k]/=acc;
+  return p => { const x=clamp(p,0,1)*N, i=Math.floor(x), f=x-i; return i>=N?1:P[i]+(P[i+1]-P[i])*f; };
+})();
+
+/* ---------- materials ---------- */
+// flat colour that fades out near the camera and into the fog, so it can never pop
+function fadeMat(color,opacity,near0=1.5,near1=7){
+  return new THREE.ShaderMaterial({
+    uniforms:{ uColor:{value:new THREE.Color(color)}, uOpacity:{value:opacity},
+      uNear:{value:new THREE.Vector2(near0,near1)}, uFog:{value:new THREE.Vector2(CFG.fogNear,CFG.fogFar)} },
+    vertexShader:`varying float vD; void main(){ vec4 mv=modelViewMatrix*vec4(position,1.); vD=-mv.z; gl_Position=projectionMatrix*mv; }`,
+    fragmentShader:`uniform vec3 uColor; uniform float uOpacity; uniform vec2 uNear,uFog; varying float vD;
+      void main(){ float a=uOpacity*smoothstep(uNear.x,uNear.y,vD)*(1.-smoothstep(uFog.x,uFog.y,vD)); gl_FragColor=vec4(uColor,a); }`,
+    transparent:true, depthWrite:false,
+  });
+}
+// inside of a soma: dark, softly lit from the upper left like the Paper drawing
+function interiorMat(pal){
+  const base=new THREE.Color(pal.c), bg=new THREE.Color(COL.bg);
+  return new THREE.ShaderMaterial({
+    uniforms:{ uDeep:{value:base.clone().lerp(bg,.8)}, uLit:{value:base.clone().lerp(bg,.48)} },
+    vertexShader:`varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader:`uniform vec3 uDeep,uLit; varying vec3 vP;
+      void main(){ float l=smoothstep(-.3,1.,dot(vP,normalize(vec3(-.45,.8,.35)))); gl_FragColor=vec4(mix(uDeep,uLit,l),1.); }`,
+    side:THREE.BackSide,
+  });
+}
+function discTex(ring){
+  const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+  x.beginPath(); x.arc(64,64,ring?50:60,0,Math.PI*2); x.fillStyle='#fff'; x.fill();
+  if(ring){ x.lineWidth=12; x.strokeStyle='#805CF9'; x.stroke(); }
+  return new THREE.CanvasTexture(c);
+}
+
+/* ==========================================================================
+   SCENE
+   ========================================================================== */
+let renderer, scene, camera, gl=true;
+let spline, L=0;
+const uC=[], uIn=[], uOut=[];
+const mains=[];        // main neurons
+const highlights=[];   // {pos, r, sprite, base}
+const ambient=[];      // drifting signals {at(t)->Vector3, t, speed, sprite}
+const landingPos=V(...LANDING.pos), landingTarget=V(...LANDING.target);
+
+function pathPoint(d,out=V()){ return out.copy(spline.getPointAt(clamp(d/L,0,1))); }
+function liftAt(d){ return CFG.lift*smooth(uC[0]*.25,uC[0]*.8,d); }
+function camPoint(d,out=V()){ pathPoint(d,out); out.y+=liftAt(d); return out; }
+
+function init(){
+  try{ renderer=new THREE.WebGLRenderer({canvas:$('#scene'),antialias:true,powerPreference:'high-performance'}); }
+  catch(e){ gl=false; return; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(COL.bg);
+  scene=new THREE.Scene();
+  scene.fog=new THREE.Fog(COL.bg,CFG.fogNear,CFG.fogFar);
+  camera=new THREE.PerspectiveCamera(CFG.fov,1,.05,500);
+
+  const sphereHi=new THREE.SphereGeometry(1,40,28), sphereLo=new THREE.SphereGeometry(1,16,12);
+  const disc=discTex(false), ringDisc=discTex(true);
+
+  /* --- the ride: one spline through every neuron centre --- */
+  const C=NEURONS.map(n=>V(...n.p));
+  // keep the heading through each neuron and do the turning out on the synapse,
+  // so you glide straight through a soma instead of whipping round inside it
+  const ctrl=[], mids=[];
+  const preDir=C[0].clone().sub(landingPos).normalize();
+  const pre0=C[0].clone().addScaledVector(preDir,-16);
+  let inDir=preDir.clone();
+  for(let i=0;i<C.length-1;i++){
+    const A=C[i],B=C[i+1],AB=B.clone().sub(A),dist=AB.length();
+    const H1=A.clone().addScaledVector(inDir,dist*.38);
+    const outDir=B.clone().sub(H1).normalize().add(AB.clone().normalize()).normalize();
+    const H2=B.clone().addScaledVector(outDir,-dist*.34);
+    const arc=new THREE.CubicBezierCurve3(A,H1,H2,B);
+    mids.push([.2,.4,.6,.8].map(t=>arc.getPoint(t)));
+    inDir=outDir;
+  }
+  const last=C.length-1, postN=C[last].clone().addScaledVector(inDir,18);
+  ctrl.push(landingPos.clone(), landingPos.clone().lerp(pre0,.5).add(V(0,4,0)), pre0);
+  C.forEach((c,i)=>{ ctrl.push(c.clone()); if(mids[i]) ctrl.push(...mids[i]); });
+  ctrl.push(postN);
+  spline=new THREE.CatmullRomCurve3(ctrl,false,'centripetal');
+  spline.arcLengthDivisions=4000;
+  L=spline.getLength();
+
+  // where the path is at each centre, and where it crosses each membrane
+  const S=4000, samples=[];
+  for(let k=0;k<=S;k++) samples.push(spline.getPointAt(k/S));
+  NEURONS.forEach((n,i)=>{
+    let kc=0,best=1e9; samples.forEach((p,k)=>{ const d=p.distanceTo(C[i]); if(d<best){best=d;kc=k;} });
+    let ki=kc; while(ki>0 && samples[ki].distanceTo(C[i])<n.r) ki--;
+    let ko=kc; while(ko<S && samples[ko].distanceTo(C[i])<n.r) ko++;
+    uC[i]=kc/S*L; uIn[i]=ki/S*L; uOut[i]=ko/S*L;
+  });
+  const corridor=[]; for(let d=0;d<=L;d+=1) corridor.push(camPoint(d));
+  const clearOf=(p,rad)=>corridor.every(q=>q.distanceToSquared(p)>rad*rad);
+
+  /* --- synapses: the path itself, drawn between membranes --- */
+  const synMat=fadeMat(0x805CF9,.42,1.2,6); synMat.renderOrder=2;
+  const branchMat=fadeMat(0x805CF9,.34,1.2,6);
+  for(let i=0;i<NEURONS.length-1;i++){
+    const pts=[]; for(let k=0;k<=60;k++) pts.push(pathPoint(uOut[i]-.4+(uIn[i+1]-uOut[i]+.8)*k/60));
+    const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),160,.14,8,false),synMat);
+    m.renderOrder=2; scene.add(m);
+    const a=uOut[i], b=uIn[i+1];
+    for(let s=0;s<2;s++) ambient.push({ at:t=>pathPoint(a+(b-a)*t), t:Math.random(), speed:.06+s*.02 });
+  }
+
+  /* --- main neurons: outside look, inside look, doorways --- */
+  const bgInst={ purple:[], blue:[], pink:[] };
+  NEURONS.forEach((n,i)=>{
+    const pal=COL[n.c], pos=C[i], r=n.r, g=new THREE.Group(); g.position.copy(pos);
+    const body=new THREE.Mesh(sphereHi,new THREE.MeshBasicMaterial({color:pal.c})); body.scale.setScalar(r);
+    const rim=new THREE.Mesh(sphereHi,new THREE.MeshBasicMaterial({color:pal.d,side:THREE.BackSide})); rim.scale.setScalar(r*1.06);
+    const inner=new THREE.Mesh(sphereHi,interiorMat(pal)); inner.scale.setScalar(r*.985);
+    g.add(rim,body,inner);
+
+    const fwd=pathPoint(uC[i]+1).sub(pathPoint(uC[i]-1)).normalize();
+    const right=V().crossVectors(fwd,UP).normalize();
+    // doorways where the signal comes in and goes out
+    [uIn[i],uOut[i]].forEach((u,k)=>{
+      if(i===0&&k===0) return;
+      const dirOut=pathPoint(u).sub(pos).normalize();
+      const door=new THREE.Mesh(new THREE.CircleGeometry(r*.24,48),
+        new THREE.MeshBasicMaterial({color:pal.l,transparent:true,opacity:k?.38:.2,depthWrite:false,side:THREE.DoubleSide}));
+      door.position.copy(dirOut).multiplyScalar(r*.93); door.quaternion.setFromUnitVectors(V(0,0,1),dirOut); door.renderOrder=4; g.add(door);
+    });
+    // nucleus, off to the side so you glide past it
+    const nucPos=pos.clone().addScaledVector(fwd,r*.62).addScaledVector(right,r*.16).addScaledVector(UP,r*.2);
+    const nb=new THREE.Mesh(sphereHi,new THREE.MeshBasicMaterial({color:pal.l})); nb.scale.setScalar(r*.11); nb.position.copy(nucPos);
+    const nr=new THREE.Mesh(sphereHi,new THREE.MeshBasicMaterial({color:pal.c,side:THREE.BackSide})); nr.scale.setScalar(r*.122); nr.position.copy(nucPos);
+    scene.add(nb,nr);
+    addHighlight(nucPos,r*.11,.45,disc);
+    // organelles floating inside, kept off the camera's line
+    const orgs=new THREE.InstancedMesh(sphereHi,new THREE.MeshBasicMaterial({color:pal.l}),26);
+    const mtx=new THREE.Matrix4(); let placed=0, tries=0;
+    while(placed<26 && tries++<900){
+      const p=V(rand(-1,1),rand(-1,1),rand(-1,1)); if(p.length()>1) continue;
+      p.multiplyScalar(r*.86).add(pos);
+      const s=r*rand(.018,.04);
+      if(!clearOf(p,r*.42+s) || p.distanceTo(nucPos)<r*.3) continue;
+      mtx.compose(p,new THREE.Quaternion(),V(s,s,s)); orgs.setMatrixAt(placed++,mtx);
+    }
+    orgs.count=placed; scene.add(orgs);
+    // halo + dendrites (dendrites keep clear of the way in and out)
+    const halos=[[3.8,.07],[2.8,.1]].map(([s,o])=>{
+      const h=new THREE.Sprite(new THREE.SpriteMaterial({map:disc,color:pal.c,transparent:true,opacity:o,depthWrite:false}));
+      h.scale.setScalar(r*s); h.userData={base:r*s,op:o}; h.renderOrder=5; g.add(h); return h;
+    });
+    const dMat=fadeMat(pal.c===COL.purple.c?0x805CF9:pal.c,.5,1.2,5);
+    let made=0, guard=0;
+    while(made<10 && guard++<80){
+      const d=V(rand(-1,1),rand(-1,1),rand(-1,1)).normalize();
+      if(Math.abs(d.dot(fwd))>.62) continue;
+      const side=V().crossVectors(d,UP).normalize().multiplyScalar(r*.25*(Math.random()<.5?-1:1));
+      const pts=[d.clone().multiplyScalar(r*1.02),d.clone().multiplyScalar(r*1.45).add(side),d.clone().multiplyScalar(r*1.85).add(side.clone().multiplyScalar(2.2))];
+      if(!pts.every(p=>clearOf(p.clone().add(pos),1.6))) continue;
+      const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),12,r*.03,6,false),dMat);
+      m.renderOrder=3; g.add(m); made++;
+    }
+    scene.add(g);
+    const hl=addHighlight(pos,r,.34,disc);
+    mains.push({pos,r,pal,halos,hl,inside:false});
+
+    // side branches ending in small nodes, like the Paper drawing
+    let br=0; guard=0;
+    while(br<2 && guard++<40){
+      const d=V(rand(-1,1),rand(-.8,.8),rand(-1,1)).normalize();
+      if(Math.abs(d.dot(fwd))>.5) continue;
+      const end=pos.clone().addScaledVector(d,r*3.4+rand(0,7));
+      const mid=pos.clone().lerp(end,.5).add(V(rand(-2,2),rand(-2,2),rand(-2,2)));
+      const c=new THREE.CatmullRomCurve3([pos.clone().addScaledVector(d,r),mid,end]);
+      const ok=[.25,.5,.75,1].every(t=>clearOf(c.getPointAt(t),3.5)) && clearOf(end,5);
+      if(!ok) continue;
+      const m=new THREE.Mesh(new THREE.TubeGeometry(c,30,.09,6,false),branchMat); m.renderOrder=2; scene.add(m);
+      bgInst[['pink','blue','purple'][(i+br)%3]].push([end,rand(.9,1.5)]);
+      ambient.push({ at:t=>c.getPointAt(t), t:Math.random(), speed:.09 });
+      br++;
+    }
+  });
+
+  /* --- faint background network, never in the way --- */
+  const keys=['purple','blue','pink'], pts=[];
+  for(let k=0;k<CFG.bgNeurons;k++){
+    let p=null;
+    for(let t=0;t<40;t++){
+      const q=V(rand(-110,130),rand(-50,50),rand(-230,50));
+      if(clearOf(q,CFG.corridor) && mains.every(n=>n.pos.distanceTo(q)>n.r*4)){ p=q; break; }
+    }
+    if(!p) continue;
+    pts.push(p); bgInst[keys[k%3]].push([p,rand(.5,1.6)]);
+  }
+  keys.forEach(key=>{
+    const list=bgInst[key]; if(!list.length) return;
+    const body=new THREE.InstancedMesh(sphereLo,new THREE.MeshBasicMaterial({color:COL[key].c}),list.length);
+    const rim=new THREE.InstancedMesh(sphereLo,new THREE.MeshBasicMaterial({color:COL[key].d,side:THREE.BackSide}),list.length);
+    const m=new THREE.Matrix4(), q=new THREE.Quaternion();
+    list.forEach(([p,s],k)=>{ m.compose(p,q,V(s,s,s)); body.setMatrixAt(k,m); m.compose(p,q,V(s*1.08,s*1.08,s*1.08)); rim.setMatrixAt(k,m); });
+    scene.add(rim,body);
+  });
+  const seg=[];
+  pts.forEach((p,i)=>{ let b=-1,bd=1e9; pts.forEach((q,j)=>{ if(j!==i){const d=p.distanceTo(q); if(d<bd){bd=d;b=j;}} }); if(bd<40) seg.push(p,pts[b]); });
+  const lines=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(seg),new THREE.LineBasicMaterial({color:0x805CF9,transparent:true,opacity:.2,depthWrite:false}));
+  lines.renderOrder=1; scene.add(lines);
+
+  /* --- little signals drifting along the wires --- */
+  ambient.forEach(a=>{
+    a.sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:ringDisc,transparent:true,depthWrite:false}));
+    a.sprite.scale.setScalar(.75); a.sprite.renderOrder=6; scene.add(a.sprite);
+    a.sprite.position.copy(a.at(a.t));
+  });
+
+  camera.position.copy(landingPos); camera.lookAt(landingTarget); qCur.copy(camera.quaternion);
+  resize();
+}
+function addHighlight(pos,r,op,tex){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:0xffffff,transparent:true,opacity:op,depthWrite:false}));
+  s.scale.setScalar(r*.78); s.renderOrder=7; scene.add(s);
+  const h={pos,r,sprite:s,base:op}; highlights.push(h); return h;
+}
+
+function narrow(){ return innerWidth<=760 || innerWidth/innerHeight<=.8; }
+function resize(){
+  if(!gl) return;
+  const w=innerWidth,h=innerHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.fov=narrow()?CFG.fovNarrow:CFG.fov;
+  if(narrow()) camera.setViewOffset(w,h,0,h*.22,w,h); else camera.setViewOffset(w,h,-w*.25,0,w,h);
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize);
+
+/* ==========================================================================
+   MOTION
+   ========================================================================== */
+const qCur=new THREE.Quaternion(), qAim=new THREE.Quaternion(), mAim=new THREE.Matrix4();
+let D=0;                       // where we are on the ride (arc length)
+const drift=V();               // gentle landing sway, eased away when we leave
+let speedNow=0, bob=0;         // smoothed speed (sets look-ahead) and float amount
+const pos=V(), aimPt=V();
+
+function startHop(toSlide,d0,d1){
+  const dur=clamp(Math.abs(d1-d0)/CFG.cruise,CFG.hopMin,CFG.hopMax);
+  state.travel={toSlide,d0,d1,dur,phase:0,rate:1,targetRate:1,revealed:false};
+  state.mode='travel';
+  fx.depart(dur);
+}
+function stepMotion(dt){
+  if(!gl) return;
+  const t=state.travel;
+  if(t){
+    if(t.phase>.62) t.targetRate=1;          // skipping speeds up the glide, the landing stays soft
+    t.rate+=(t.targetRate-t.rate)*(1-Math.exp(-dt*5));
+    t.phase+=dt*t.rate/t.dur;
+    const nd=t.d0+(t.d1-t.d0)*PROFILE(t.phase);
+    if(dt>0) speedNow+=(Math.abs(nd-D)/dt-speedNow)*(1-Math.exp(-dt*6));
+    D=nd;
+    if(!t.revealed && t.phase>=CFG.revealAt){ t.revealed=true; renderSlide(t.toSlide); }
+    if(t.phase>=1){ D=t.d1; state.travel=null; arrive(t.toSlide); }
+  }
+  const time=performance.now()/1000;
+  if(state.mode==='landing'){
+    const a=reduceMotion?0:1;
+    drift.set(Math.sin(time*.35)*2.2*a,Math.sin(time*.23)*1.2*a,0);
+    pos.copy(landingPos).add(drift);
+    aimPt.copy(landingTarget);
+  }else{
+    drift.multiplyScalar(Math.exp(-dt*3));
+    camPoint(D,pos).add(drift);
+    if(!state.travel) speedNow*=Math.exp(-dt*6);
+    bob+=((state.mode==='slide'&&!reduceMotion?1:0)-bob)*(1-Math.exp(-dt*1.5));
+    pos.y+=Math.sin(time*1.05)*.05*bob;  // floating, barely
+    camPoint(D+clamp(3+speedNow*.4,3,CFG.lookAhead),aimPt);
+  }
+  camera.position.copy(pos);
+  // turn toward the aim point with damping and a turn-rate cap
+  mAim.lookAt(pos,aimPt,UP); qAim.setFromRotationMatrix(mAim);
+  const ang=qCur.angleTo(qAim);
+  if(ang>1e-5){
+    let k=1-Math.exp(-dt*CFG.turnRate);
+    const cap=CFG.maxTurnDeg*Math.PI/180*dt; if(ang*k>cap) k=cap/ang;
+    qCur.slerp(qAim,k);
+  }
+  camera.quaternion.copy(qCur);
+}
+
+/* ==========================================================================
+   FLOW
+   ========================================================================== */
+const slideEl=$('#slide'), progEl=$('#progress'), navEl=$('#nav');
+SLIDES.forEach(()=>progEl.appendChild(document.createElement('i')));
+const BACK_SVG='<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 4.5L7 10l5.5 5.5"/></svg>';
+
+function cut(fn){ const f=$('#fade'); f.classList.add('on'); setTimeout(()=>{ fn(); requestAnimationFrame(()=>f.classList.remove('on')); },290); }
+
+function renderSlide(i){
+  const s=SLIDES[i];
+  const big=s.quote?`<p class="big quote">${s.quote}</p>`:`<p class="big" id="num">${s.count?'0':s.big}</p>`;
+  slideEl.innerHTML=`<span class="tag c-${s.c}">${s.tag}</span>${big}<p class="line">${s.line}</p>`;
+  slideEl.classList.remove('in'); slideEl.dataset.i=i;
+  [...progEl.children].forEach((b,k)=>b.classList.toggle('done',k<=i));
+  if(s.end){
+    navEl.innerHTML=`<button class="btn primary grow" id="share">Share My Year</button><button class="btn secondary" id="again">Watch Again</button>`;
+    $('#share').onclick=share; $('#again').onclick=()=>go(0);
+  }else{
+    navEl.innerHTML=`<button class="btn secondary icon" id="back" aria-label="Previous" ${i===0?'disabled style="opacity:.35"':''}>${BACK_SVG}</button><button class="btn primary grow" id="next">Next</button>`;
+    $('#next').onclick=e=>{e.stopPropagation();next();};
+    $('#back').onclick=e=>{e.stopPropagation();prev();};
+  }
+  navEl.classList.remove('wait');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>slideEl.classList.add('in')));
+  if(s.count) countUp(s);
+}
+function countUp(s){
+  const el=$('#num'); if(!el) return;
+  if(reduceMotion){ el.textContent=s.big; return; }
+  const t0=performance.now(), d=1100;
+  (function tick(now){
+    const p=Math.min(1,(now-t0)/d), v=Math.round(s.count*(1-Math.pow(1-p,3)));
+    el.textContent=v.toLocaleString('en-GB'); if(p<1) requestAnimationFrame(tick);
+  })(t0);
+}
+function hideSlide(){ slideEl.classList.remove('in'); navEl.classList.add('wait'); }
+
+function arrive(i){
+  state.mode='slide'; state.slide=i;
+  if(slideEl.dataset.i!==String(i)) renderSlide(i);
+  pulse(i); fx.arrive(i, SLIDES[i].end);
+}
+let pulseAt=-1,pulseIdx=-1;
+function pulse(i){ pulseIdx=i; pulseAt=performance.now(); }
+
+function enter(){
+  fx.unlock(); fx.tap();
+  const btn=$('#connect');
+  btn.setAttribute('aria-busy','true');
+  btn.innerHTML='<span class="spinner" aria-hidden="true"></span>Connecting…';
+  setTimeout(()=>{
+    $('#landing').classList.add('gone'); $('#chips').classList.add('gone');
+    $('#journey').classList.add('on');
+    [...progEl.children].forEach(b=>b.classList.remove('done'));
+    slideEl.innerHTML=''; slideEl.dataset.i=''; navEl.innerHTML=''; navEl.classList.add('wait');
+    if(!gl||reduceMotion) return cut(()=>{ D=uC[0]||0; arrive(0); });
+    D=0; startHop(0,0,uC[0]);
+  },reduceMotion?250:700);
+}
+function exit(){
+  cut(()=>{
+    state.mode='landing'; state.slide=-1; state.travel=null; D=0;
+    $('#journey').classList.remove('on');
+    $('#landing').classList.remove('gone'); $('#chips').classList.remove('gone');
+    const b=$('#connect'); b.removeAttribute('aria-busy'); b.textContent='Connect Account';
+    if(gl){ camera.position.copy(landingPos); camera.lookAt(landingTarget); qCur.copy(camera.quaternion); }
+    b.focus();
+  });
+}
+function go(i){
+  const adjacent=Math.abs(i-state.slide)===1;
+  if(adjacent && gl && !reduceMotion){
+    hideSlide(); slideEl.dataset.i='';
+    return startHop(i,uC[state.slide],uC[i]);
+  }
+  hideSlide();
+  cut(()=>{ if(gl){ D=uC[i]; stepMotion(0); qCur.copy(qAim); } slideEl.dataset.i=''; renderSlide(i); arrive(i); });
+}
+function next(){
+  if(state.mode==='travel'){ if(state.travel.d1>state.travel.d0) state.travel.targetRate=CFG.skipRate; return; }
+  if(state.mode!=='slide' || state.slide>=SLIDES.length-1) return;
+  fx.tap(); go(state.slide+1);
+}
+function prev(){
+  if(state.mode==='travel'){ if(state.travel.d1<state.travel.d0) state.travel.targetRate=CFG.skipRate; return; }
+  if(state.mode!=='slide' || state.slide<=0) return;
+  fx.tap(); go(state.slide-1);
+}
+async function share(){
+  fx.tap();
+  try{
+    if(navigator.share){ await navigator.share({title:'My X Wrapped',text:SHARE_TEXT}); return; }
+    await navigator.clipboard.writeText(SHARE_TEXT); toast('Copied to clipboard');
+  }catch(e){ if(e&&e.name!=='AbortError') toast('Could not share right now'); }
+}
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
+
+$('#connect').onclick=enter;
+$('#close').onclick=e=>{ e.stopPropagation(); exit(); };
+$('#journey').addEventListener('click',e=>{ if(!e.target.closest('button') && state.mode==='slide') next(); });
+addEventListener('keydown',e=>{
+  if(!$('#journey').classList.contains('on')) return;
+  if(e.key==='ArrowRight'){ e.preventDefault(); next(); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); prev(); }
+  else if(e.key==='Escape'){ exit(); }
+  else if(e.key===' ' && !e.target.closest('button')){ e.preventDefault(); next(); }
+});
+
+/* ==========================================================================
+   SOUND + HAPTICS  (one toggle; haptics via web-haptics, sound synthesised)
+   ========================================================================== */
+const fx=(()=>{
+  let on=true; try{ on=localStorage.getItem('xw-fx')!=='off'; }catch(e){}
+  let haptics=null, ctx=null, master=null, noise=null;
+  import('https://cdn.jsdelivr.net/npm/web-haptics@0.0.6/+esm').then(m=>{ haptics=new m.WebHaptics(); }).catch(()=>{});
+  const buzz=p=>{ if(on&&haptics) haptics.trigger(p).catch(()=>{}); };
+  function unlock(){
+    if(ctx){ ctx.resume&&ctx.resume(); return; }
+    try{
+      ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const comp=ctx.createDynamicsCompressor(); comp.connect(ctx.destination);
+      master=ctx.createGain(); master.gain.value=on?.8:0; master.connect(comp);
+      noise=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);
+      const ch=noise.getChannelData(0); for(let i=0;i<ch.length;i++) ch[i]=Math.random()*2-1;
+    }catch(e){ ctx=null; }
+  }
+  const ok=()=>on&&ctx&&ctx.state!=='closed';
+  function whoosh(dur){
+    if(!ok()) return; const t=ctx.currentTime;
+    const src=ctx.createBufferSource(); src.buffer=noise; src.loop=true;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=.9;
+    bp.frequency.setValueAtTime(260,t); bp.frequency.exponentialRampToValueAtTime(1300,t+dur*.45); bp.frequency.exponentialRampToValueAtTime(380,t+dur);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.16,t+dur*.4); g.gain.linearRampToValueAtTime(0,t+dur);
+    src.connect(bp).connect(g).connect(master); src.start(t); src.stop(t+dur+.05);
+  }
+  function thump(){
+    if(!ok()) return; const t=ctx.currentTime;
+    const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(170,t); o.frequency.exponentialRampToValueAtTime(52,t+.28);
+    const g=ctx.createGain(); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.5,t+.012); g.gain.exponentialRampToValueAtTime(.0001,t+.36);
+    o.connect(g).connect(master); o.start(t); o.stop(t+.4);
+  }
+  function chime(freq,when=0,vol=.12){
+    if(!ok()) return; const t=ctx.currentTime+when;
+    [1,2.005].forEach((m,k)=>{
+      const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=freq*m;
+      const g=ctx.createGain(); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vol*(k?.35:1),t+.015); g.gain.exponentialRampToValueAtTime(.0001,t+1.4);
+      o.connect(g).connect(master); o.start(t); o.stop(t+1.5);
+    });
+  }
+  const SCALE=[523.25,587.33,659.25,783.99,880,1046.5];
+  return {
+    unlock,
+    tap(){ buzz([{duration:18,intensity:.5}]); },
+    depart(dur){ whoosh(dur); buzz([{duration:24,intensity:.45}]); },
+    membrane(){ thump(); buzz([{duration:38,intensity:.9}]); },
+    arrive(i,end){
+      chime(SCALE[i%SCALE.length]);
+      if(end){ chime(SCALE[2],.12,.09); chime(SCALE[4],.24,.09); chime(SCALE[5],.36,.08); buzz('success'); }
+      else buzz([{duration:22,intensity:.6},{delay:70,duration:18,intensity:.3}]);
+    },
+    get on(){ return on; },
+    toggle(){
+      on=!on; try{ localStorage.setItem('xw-fx',on?'on':'off'); }catch(e){}
+      if(master) master.gain.setTargetAtTime(on?.8:0,ctx.currentTime,.05);
+      if(on){ unlock(); buzz([{duration:20,intensity:.5}]); }
+      return on;
+    },
+  };
+})();
+function syncFxButton(){ const b=$('#fxToggle'); b.setAttribute('aria-pressed',String(fx.on)); b.classList.toggle('muted',!fx.on); }
+$('#fxToggle').onclick=e=>{ e.stopPropagation(); fx.toggle(); syncFxButton(); };
+syncFxButton();
+
+/* ==========================================================================
+   LOOP
+   ========================================================================== */
+const camR=V(), camU=V(), toCam=V(), proj=V();
+const chipEls=[...document.querySelectorAll('.chip')];
+const washEl=$('#wash');
+let last=performance.now(), washKey='';
+
+function stepWorld(dt,now){
+  // membrane: wash opacity comes straight from distance to the nearest membrane
+  let wash=0, washCol=null;
+  mains.forEach(n=>{
+    const dist=camera.position.distanceTo(n.pos);
+    const inside=dist<n.r;
+    if(inside!==n.inside){ n.inside=inside; if(state.mode==='travel') fx.membrane(); }
+    const w=1-smooth(0,n.r*.42,Math.abs(dist-n.r));
+    if(w>wash){ wash=w; washCol=n.pal.c; }
+    // halos and the big highlight fade away as you get close, so nothing pops
+    const far=smooth(n.r*1.4,n.r*3.6,dist);
+    n.halos.forEach(h=>{ h.material.opacity=h.userData.op*far; h.visible=far>.01; });
+  });
+  if(washCol!==null){ const k='#'+washCol.toString(16).padStart(6,'0'); if(k!==washKey){ washEl.style.background=k; washKey=k; } }
+  washEl.style.opacity=(state.mode==='landing'?0:wash).toFixed(3);
+
+  camR.setFromMatrixColumn(camera.matrixWorld,0); camU.setFromMatrixColumn(camera.matrixWorld,1);
+  highlights.forEach(h=>{
+    const dist=camera.position.distanceTo(h.pos);
+    toCam.copy(camera.position).sub(h.pos).normalize();
+    h.sprite.position.copy(h.pos).addScaledVector(camU,h.r*.32).addScaledVector(camR,-h.r*.32).addScaledVector(toCam,h.r*1.02);
+    const f=smooth(h.r*1.5,h.r*2.6,dist); h.sprite.material.opacity=h.base*f; h.sprite.visible=f>.01;
+  });
+  if(pulseIdx>=0){
+    const k=(now-pulseAt)/700, n=mains[pulseIdx];
+    if(k<1){ const s=1+Math.sin(k*Math.PI)*.16; n.halos.forEach(h=>h.scale.setScalar(h.userData.base*s)); } else pulseIdx=-1;
+  }
+  ambient.forEach(a=>{
+    if(!reduceMotion){ a.t=(a.t+a.speed*dt)%1; a.sprite.position.copy(a.at(a.t)); }
+    const d=camera.position.distanceTo(a.sprite.position);
+    const f=smooth(2.5,7,d); a.sprite.material.opacity=f; a.sprite.visible=f>.01;
+  });
+  if(state.mode==='landing'){
+    chipEls.forEach(el=>{
+      const n=mains[+el.dataset.n]; proj.copy(n.pos).project(camera);
+      const x=(proj.x+1)/2*innerWidth, y=(1-proj.y)/2*innerHeight, cw=el.offsetWidth, ch=el.offsetHeight;
+      const left=el.dataset.side==='left', cx=left?x-cw-18:x+18, cy=left?y+10:y-ch-6;
+      el.style.transform=`translate(${clamp(cx,12,innerWidth-cw-12)}px,${clamp(cy,12,innerHeight-ch-12)}px)`;
+    });
+  }
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  if(!gl||window.__pause) return;
+  const dt=Math.min(.05,(now-last)/1000); last=now;
+  stepMotion(dt);
+  camera.updateMatrixWorld();
+  stepWorld(dt,now);
+  renderer.render(scene,camera);
+}
+
+init();
+requestAnimationFrame(frame);
+
+/* test hook: run the motion at a fixed 60fps with no rendering, return stats */
+window.__wrapped={
+  state, CFG, get D(){return D;}, uC, render(){ renderer.render(scene,camera); },
+  enter, next, prev, go,
+  sim(seconds,dt=1/60){
+    const out=[]; let pp=camera.position.clone(), pq=camera.quaternion.clone();
+    for(let k=0;k<Math.round(seconds/dt);k++){
+      stepMotion(dt); camera.updateMatrixWorld(); stepWorld(dt,performance.now());
+      const p=camera.position, q=camera.quaternion;
+      out.push({speed:p.distanceTo(pp)/dt, turn:q.angleTo(pq)/dt*180/Math.PI, mode:state.mode, wash:+washEl.style.opacity});
+      pp.copy(p); pq.copy(q);
+    }
+    return out;
+  },
+};
+</script>
+</body>
+</html>
