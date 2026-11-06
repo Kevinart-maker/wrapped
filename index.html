@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#181818">
 <title>Your X Wrapped</title>
 <meta name="description" content="Fly through your year on X, neuron to neuron.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -61,6 +64,8 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 #landing h1{margin:0;font-size:clamp(52px,7vw,96px);font-weight:600;letter-spacing:-0.04em;line-height:1.1}
 #landing .sub{margin:12px 0 32px;font-size:clamp(18px,1.7vw,24px);color:var(--muted);letter-spacing:-0.02em;line-height:1.5;max-width:30ch}
 #landing .fine{margin:16px 0 0;font-size:14px;color:var(--faint)}
+#landing .link{display:block;min-height:44px;margin-top:2px;padding:0;font-size:14px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+#landing .link:hover{color:#fff}
 #landing.gone{opacity:0;pointer-events:none}
 #landing.gone > *{pointer-events:none}
 
@@ -153,7 +158,8 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
   <h1 id="h">Your X Wrapped</h1>
   <p class="sub">Connect your X account to relive your year, one memory at a time.</p>
   <div><button class="btn primary" id="connect">Connect Account</button></div>
-  <p class="fine">Demo with sample data. Nothing is posted for you.</p>
+  <p class="fine">We only read your posts. Nothing is posted for you.</p>
+  <button class="link" id="demo">See a demo with sample data</button>
 </section>
 
 <div id="chips" aria-hidden="true">
@@ -203,7 +209,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
    ========================================================================== */
 
 /* ---------- DATA (sample year) ---------- */
-const SLIDES = [
+let SLIDES = [
   { c:'purple', tag:'Posts',        big:'5,318', count:5318, line:'posts and replies this year. About <strong>14 a day</strong>.' },
   { c:'blue',   tag:'Busiest hour', big:'10pm',  line:'is when you show up the most. Night owl confirmed.' },
   { c:'pink',   tag:'Streak',       big:'47 days', line:'in a row without missing a day.' },
@@ -211,7 +217,7 @@ const SLIDES = [
   { c:'blue',   tag:'Your person',  big:'84', count:84, line:'replies to <strong>@julespark</strong>. You two never stopped talking.' },
   { c:'pink',   tag:'Your year',    quote:'The Midnight Shipper', line:'Late nights, real launches, zero chill.', end:true },
 ];
-const SHARE_TEXT = 'My X Wrapped: The Midnight Shipper. 5,318 posts, busiest at 10pm, a 47 day streak.';
+let SHARE_TEXT = 'My X Wrapped: The Midnight Shipper. 5,318 posts, busiest at 10pm, a 47 day streak.';
 
 /* ---------- LOOK ---------- */
 const COL = {
@@ -597,11 +603,17 @@ function arrive(i){
 let pulseAt=-1,pulseIdx=-1;
 function pulse(i){ pulseIdx=i; pulseAt=performance.now(); }
 
-function enter(){
-  fx.unlock(); fx.tap();
+function busy(label){
   const btn=$('#connect');
   btn.setAttribute('aria-busy','true');
-  btn.innerHTML='<span class="spinner" aria-hidden="true"></span>Connecting…';
+  btn.innerHTML='<span class="spinner" aria-hidden="true"></span>'+label;
+}
+function idle(){ const b=$('#connect'); b.removeAttribute('aria-busy'); b.textContent='Connect Account'; }
+function enter(){
+  fx.unlock(); fx.tap(); busy('Connecting…');
+  begin();
+}
+function begin(){
   setTimeout(()=>{
     $('#landing').classList.add('gone'); $('#chips').classList.add('gone');
     $('#journey').classList.add('on');
@@ -616,7 +628,7 @@ function exit(){
     state.mode='landing'; state.slide=-1; state.travel=null; D=0;
     $('#journey').classList.remove('on');
     $('#landing').classList.remove('gone'); $('#chips').classList.remove('gone');
-    const b=$('#connect'); b.removeAttribute('aria-busy'); b.textContent='Connect Account';
+    idle();
     if(gl){ camera.position.copy(landingPos); camera.lookAt(landingTarget); qCur.copy(camera.quaternion); }
     b.focus();
   });
@@ -649,7 +661,27 @@ async function share(){
 }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
 
-$('#connect').onclick=enter;
+// live: X sign-in happens on the server (/api/login), then we come back here with ?x=ok
+$('#connect').onclick=()=>{ fx.unlock(); fx.tap(); busy('Opening X…'); location.href='/api/login'; };
+$('#demo').onclick=enter;
+const MSG={ denied:'No problem. You did not connect X.', error:'Could not connect to X. Try again.',
+  no_access:'X is not letting this app read posts yet.', rate_limited:'X is busy. Try again in a few minutes.',
+  signed_out:'Your session ended. Connect again.', failed:'Something went wrong reading your posts.', empty:'No posts found in the last year.' };
+async function loadLive(){
+  busy('Reading your year…');
+  try{
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const r=await fetch('/api/wrapped?tz='+encodeURIComponent(tz),{credentials:'same-origin'});
+    const d=await r.json();
+    if(d.error||d.empty){ idle(); return toast(MSG[d.error||'empty']||MSG.failed); }
+    SLIDES=d.slides; SHARE_TEXT=d.share; begin();
+  }catch(e){ idle(); toast(MSG.failed); }
+}
+(()=>{
+  const q=new URLSearchParams(location.search).get('x'); if(!q) return;
+  history.replaceState(null,'',location.pathname);
+  if(q==='ok') loadLive(); else toast(MSG[q]||MSG.error);
+})();
 $('#close').onclick=e=>{ e.stopPropagation(); exit(); };
 $('#journey').addEventListener('click',e=>{ if(!e.target.closest('button') && state.mode==='slide') next(); });
 addEventListener('keydown',e=>{

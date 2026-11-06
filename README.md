@@ -30,12 +30,16 @@ Everything is in `index.html`, in this order:
 
 `window.__wrapped.sim(seconds)` runs the motion at a fixed 60fps with no rendering and returns speed and turn-rate per frame. Use it to check for spikes after any change.
 
-## Going live with the X API (plan)
+## Live X data
 
-1. Create an app in the X developer portal and turn on OAuth 2.0 (Authorization Code with PKCE). Set the callback to `https://YOUR-DOMAIN/api/auth/callback`.
-2. Add serverless functions in `/api` on Vercel: `login` (redirect to X), `callback` (swap the code for a token, keep it in an encrypted cookie), `wrapped` (fetch the user's posts and return the slide numbers).
-3. Keep secrets in Vercel env vars (see `.env.example`). Never in the browser.
-4. Replace `SLIDES` with the response from `/api/wrapped`.
+Login is OAuth 2.0 + PKCE, read-only (`tweet.read users.read`). Three serverless routes in `/api`:
+
+- `login.js` sends the user to X to approve.
+- `callback.js` swaps the code for a token, kept 2 hours in an encrypted httpOnly cookie. Nothing is stored on a server.
+- `wrapped.js` reads the last year of the user's own posts (X allows up to the 3,200 most recent) and builds the 6 slides.
+
+Env vars (Vercel): `X_CLIENT_ID`, `X_CLIENT_SECRET`, optional `SESSION_SECRET` (falls back to the client secret) and `X_REDIRECT_URI`.
+Callback URL in the X developer portal: `https://YOUR-DOMAIN/api/callback`.
 
 ## Design rules
 
