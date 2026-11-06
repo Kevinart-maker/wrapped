@@ -8,7 +8,7 @@ const MAX_PAGES = 32; // 32 x 100 = the 3,200 most recent posts X lets us read
 async function xget(path, params, at) {
   const r = await fetch(`${API}${path}?${new URLSearchParams(params)}`, { headers: { Authorization: `Bearer ${at}` } });
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error('x'); e.status = r.status; throw e; }
+  if (!r.ok) { console.error('x-api', path, r.status, JSON.stringify(body).slice(0, 300)); const e = new Error('x'); e.status = r.status; throw e; }
   return body;
 }
 
