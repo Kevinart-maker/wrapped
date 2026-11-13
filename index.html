@@ -158,8 +158,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
   <h1 id="h">Your X Wrapped</h1>
   <p class="sub">Connect your X account to relive your year, one memory at a time.</p>
   <div><button class="btn primary" id="connect">Connect Account</button></div>
-  <p class="fine">We only read your posts. Nothing is posted for you.</p>
-  <button class="link" id="demo">See a demo with sample data</button>
+  <p class="fine">Sample data. Nothing is connected to your account.</p>
 </section>
 
 <div id="chips" aria-hidden="true">
@@ -662,8 +661,7 @@ async function share(){
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
 
 // live: X sign-in happens on the server (/api/login), then we come back here with ?x=ok
-$('#connect').onclick=()=>{ fx.unlock(); fx.tap(); busy('Opening X…'); location.href='/api/login'; };
-$('#demo').onclick=enter;
+$('#connect').onclick=enter;   // demo only: no X login, sample data
 const MSG={ denied:'No problem. You did not connect X.', error:'Could not connect to X. Try again.',
   no_access:'X is not letting this app read posts yet.', rate_limited:'X is busy. Try again in a few minutes.',
   signed_out:'Your session ended. Connect again.', failed:'Something went wrong reading your posts.', empty:'No posts found in the last year.' };
